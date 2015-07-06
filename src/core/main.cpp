@@ -6,12 +6,15 @@
 //  University of Florida
 
 #include <iostream>
-
+#include "AM1gen.h"
 
 using namespace std;
 
 
 int main()
 {
+    AM1gen Furan("FuranAM1.com");
+    Furan.runGaussian();
+
     return 0;
 }

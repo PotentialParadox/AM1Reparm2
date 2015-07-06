@@ -14,6 +14,10 @@ public:
 
     void setInputFile(std::string z);
 
+    void printLine();
+
+    void runGaussian();
+
 private:
     std::string inputFile;
 
