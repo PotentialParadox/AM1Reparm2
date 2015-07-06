@@ -49,12 +49,11 @@ inline extern string trim (string line)
 /*-------------------------------------------
      	G09 Command Execution
 -------------------------------------------*/
-inline extern bool execg09(string cmd,string wkdir,int tid) {
+inline extern bool execg09(string cmd) {
 	//cout << "EXEC: " << cmd << endl;
 	stringstream sscmd,errout;
 
-	errout << wkdir << "gauerr_tid" << tid << ".e";
-	sscmd << cmd << " 2> " << errout.str();
+	sscmd << cmd;
 
 	// Open a pipe and run command
 	FILE* pipe = popen(sscmd.str().c_str(), "r");
