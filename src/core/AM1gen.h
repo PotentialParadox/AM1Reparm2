@@ -10,16 +10,19 @@
 class AM1gen
 {
 public:
-    AM1gen(std::string inputFile);
 
-    void setInputFile(std::string z);
-
-    void printLine();
-
-    void runGaussian();
+    AM1gen(int a, char *b[]);
 
 private:
+
+    void argumentReader(int b, char *a[]);
+
+    void inputReader(const std::string &iFile);
+
+    void runGaussian(const std::string &, const std::string &) const;
+
     std::string inputFile;
+    std::string parmeters;
 
 };
 

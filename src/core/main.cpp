@@ -8,13 +8,11 @@
 #include <iostream>
 #include "AM1gen.h"
 
-using namespace std;
+using std::cout;
+using std::endl;
 
-
-int main()
+int main(int argc, char *argv[])
 {
-    AM1gen Furan("FuranAM1.com");
-    Furan.runGaussian();
-
+    AM1gen furan(argc, argv);
     return 0;
 }
