@@ -16,13 +16,16 @@ public:
 private:
 
     void argumentReader(int b, char *a[]);
-
-    void inputReader(const std::string &iFile);
-
+    void inputReader();
     void runGaussian(const std::string &, const std::string &) const;
 
     std::string inputFile;
-    std::string parmeters;
+    std::string outputFile;
+    std::string am1orig;  // Original AM1 input file
+    std::string targetFile;  // Original target file
+    int nproc; // Number of processors
+    int population;  // Population size
+    int ngen;  // Number of generations
 
 };
 

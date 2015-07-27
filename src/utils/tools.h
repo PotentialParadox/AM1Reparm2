@@ -77,4 +77,20 @@ string tildeReplace(string directory)
     return wantedDirectory;
 }
 
+/*------------------------------------------
+ *        Suffix Removal
+ *-----------------------------------------*/
+string removeSuffix(const string& word)
+{
+    string rword;
+    string::const_iterator iter;
+    iter = word.begin();
+    while ((iter != word.end()) && (*iter != '.'))
+    {
+        rword += *iter;
+        ++iter;
+    }
+    return rword;
+}
+
 #endif //AM1REPARM2_TOOLS_H
