@@ -6,13 +6,13 @@
 //  University of Florida
 
 #include <iostream>
-#include "AM1gen.h"
+#include "AM1geneticAlgorithm.h"
 
 using std::cout;
 using std::endl;
 
 int main(int argc, char *argv[])
 {
-    AM1gen furan(argc, argv);
+    AM1geneticAlgorithm furan(argc, argv);
     return 0;
 }

@@ -7,11 +7,11 @@
 
 #include <string>
 
-class AM1gen
+class AM1geneticAlgorithm
 {
 public:
 
-    AM1gen(int a, char *b[]);
+    AM1geneticAlgorithm(int a, char *b[]);
 
 private:
 

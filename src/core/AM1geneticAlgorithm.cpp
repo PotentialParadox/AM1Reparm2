@@ -6,36 +6,22 @@
 #include <iostream>
 #include <omp.h>
 #include <sstream>
-#include "AM1gen.h"
+#include "AM1geneticAlgorithm.h"
 #include "../utils/tools.h"
+#include "AM1gene.h"
 
 using std::cout;
 using std::endl;
 using std::cerr;
 
-AM1gen::AM1gen(int a, char *b[]) : inputFile("input.ipt"), outputFile("output.opt")
+AM1geneticAlgorithm::AM1geneticAlgorithm(int a, char *b[]) : inputFile("input.ipt"), outputFile("output.opt")
 {
     argumentReader(a, b);
     inputReader();
-
-    cout << "Begining genetic algorithm" << endl;
-    omp_set_num_threads(nproc);
-#pragma omp parallel
-    {
-        int nthrds = omp_get_num_threads();
-        int i = omp_get_thread_num();
-        for (i; i < population; i = i + nthrds)
-        {
-            stringstream jobi;
-            stringstream jobo;
-            jobi << am1orig << ".com";
-            jobo << am1orig << "_" << i << ".log";
-            runGaussian(jobi.str(), jobo.str());
-        }
-    }
+    AM1gene furan(inputFile);
 }
 
-void AM1gen::runGaussian(const std::string &infile, const std::string &outfile) const
+void AM1geneticAlgorithm::runGaussian(const std::string &infile, const std::string &outfile) const
 {
     string efile = outfile + ".e";
     string x = "g09 " + infile + " " + outfile + " 2> " + efile;
@@ -54,7 +40,7 @@ void AM1gen::runGaussian(const std::string &infile, const std::string &outfile) 
     exec(x);
 }
 
-void AM1gen::inputReader()
+void AM1geneticAlgorithm::inputReader()
 {
     cout << "Opening input file " << inputFile << endl;
     ifstream infile(inputFile.c_str());
@@ -102,7 +88,7 @@ void AM1gen::inputReader()
     }
 }
 
-void AM1gen::argumentReader(int b, char *a[])
+void AM1geneticAlgorithm::argumentReader(int b, char *a[])
 {
     string argument;
     string arguments;
