@@ -54,8 +54,28 @@ def extract_floats(am1_parameters):
     return parameter_floats
 
 def build_input(file_name, coordinates, parameter_list, parameter_floats):
+    p_float = re.compile('\-?\d+\.\d+,?')
     f = open(file_name, 'w')
     f.write(coordinates)
+    line_number = 0
+    parameter_string = ''
+    float_count = 0
+    for params in parameter_list:
+        if params[1] > line_number:
+            parameter_string += '\n'
+        else:
+            parameter_string += ' '
+        line_number = params[1]
+        parameter_string += re.sub(p_float, '', params[0])
+        for i in range(float_count, float_count + params[2]):
+            if i == float_count:
+                parameter_string += str(parameter_floats[i])
+            else:
+                parameter_string += ',' + str(parameter_floats[i])
+        float_count += params[2]
+
+    f.write(parameter_string)
+    f.close()
 
 coordinates = read_coordinates('FuranAM1.com')
 params = read_parameters('FuranAM1.com')
