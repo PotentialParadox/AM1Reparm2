@@ -17,6 +17,7 @@ def read_coordinates(file_name):
         if blank_count == 3:
             break
     f.close()
+    lines = lines[:-1]
     return lines
 
 # read_parameters returns a list of [parameter word, line_number, and number of float parameters]
