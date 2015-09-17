@@ -160,7 +160,7 @@ def perturb_parameters(parameters, mutation_rate, percent_change):
 def run_gaussian(file_name):
     p_segfault = re.compile('segmentation')
     input_file = file_name + '.com'
-    output_file = file_name + str(i) + '.log'
+    output_file = file_name + '.log'
     proc = subprocess.Popen(['g09', input_file, output_file], stderr=subprocess.PIPE,)
     stdout_value = proc.communicate()[1]
     if re.search(p_segfault, str(stdout_value)):
@@ -251,24 +251,10 @@ def genetic_thread_loop(file_name, dft_output_file, params, coordinates, inital_
     print(thread_fitness_record)
 
 
-if __name__ == '__main__':
-jobs = []
-start = time.time()
-for i in range(100):
-    p = multiprocessing.Process(target=genetic_thread_loop, args=('FuranAM1', 'FuranDFT.log', ))
-    jobs.append(p)
-    if i%10 == 0:
-        print(i)
-    p.start()
-end = time.time()
-print(end - start)
-
-'''
 history = run_genetic_algorithm('Furan', 100, 0.1, 0.2)
 record_history = np.array(history)
 plt.plot(record_history[:,0], record_history[:,1], '-o')
 plt.show()
-'''
 
 
 
