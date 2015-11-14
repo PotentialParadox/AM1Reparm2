@@ -1,37 +1,57 @@
 import re
-import math
+# from gene import Gene
 import subprocess
 import random
 
 
-def build_input(file_name, coordinates, parameter_list, parameter_floats):
+def build_input(file_name, header, coordinates,
+                parameter_list, parameter_floats, dft="No"):
     p_float = re.compile('\-?\d+\.\d+,?')
     p_eheat = re.compile('EHeat')
     p_EISol = re.compile('EISol')
     f = open(file_name, 'w')
-    f.write(coordinates)
-    line_number = 0
-    parameter_string = ''
-    float_count = 0
-    for params in parameter_list:
-        if params[1] > line_number:
-            parameter_string += '\n'
+    f.write(header)
+    f.write(coordinates[0])
+    for i, j in enumerate(coordinates[1]):
+        s_coordinates = str(int(j))
+        if coordinates[2][i*3] < 0:
+            s_coordinates += 7 * " " + "{0:.6f}".format(coordinates[2][i*3])
         else:
-            parameter_string += ' '
-        line_number = params[1]
-        if not (re.search(p_eheat, params[0])
-                or re.search(p_EISol, params[0])):
-            parameter_string += re.sub(p_float, '', params[0])
+            s_coordinates += 8 * " " + "{0:.6f}".format(coordinates[2][i*3])
+        if coordinates[2][i*3 + 1] < 0:
+            s_coordinates += 4 * " " + "{0:.6f}".format(coordinates[2][i*3+1])
         else:
-            parameter_string += params[0]
-        for i in range(float_count, float_count + params[2]):
-            if i == float_count:
-                parameter_string += str(parameter_floats[i])
+            s_coordinates += 5 * " " + "{0:.6f}".format(coordinates[2][i*3+1])
+        if coordinates[2][i*3 + 2] < 0:
+            s_coordinates += 4 * " " + "{0:.6f}".format(coordinates[2][i*3+2])
+        else:
+            s_coordinates += 5 * " " + "{0:.6f}".format(coordinates[2][i*3+2])
+        s_coordinates += '\n'
+        f.write(s_coordinates)
+    if dft == "No":
+        line_number = 0
+        parameter_string = ''
+        float_count = 0
+        for params in parameter_list:
+            if params[1] > line_number:
+                parameter_string += '\n'
             else:
-                parameter_string += ',' + str(parameter_floats[i])
-        float_count += params[2]
+                parameter_string += ' '
+            line_number = params[1]
+            if not (re.search(p_eheat, params[0])
+                    or re.search(p_EISol, params[0])):
+                parameter_string += re.sub(p_float, '', params[0])
+            else:
+                parameter_string += params[0]
+            for i in range(float_count, float_count + params[2]):
+                if i == float_count:
+                    parameter_string += '{0:f}'.format(parameter_floats[i])
+                else:
+                    parameter_string += ',' + '{0:f}'.format(parameter_floats[i])
+            float_count += params[2]
 
-    f.write(parameter_string)
+        f.write(parameter_string)
+    f.write("\n\n")
     f.close()
 
 
@@ -57,17 +77,18 @@ def find_forces(file_name):
     return forces
 
 
-def find_ground_energy(file_name):
-    p_float = re.compile('\-?\d+\.\d+,?')
-    p_ground = re.compile('SCF Done')
-    f = open(file_name, 'r')
-    ground_energy = 0
-    for line in f:
-        if re.search(p_ground, line):
-            m = re.findall(p_float, line)
-            ground_energy = float(m[0])
-    f.close()
-    return ground_energy
+def find_force_fitness(job_data):
+    total_fitness = 0
+    for i in range(job_data.ngeom):
+        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+        AM1_forces = find_forces(AM1_file)
+        DFT_forces = find_forces(DFT_file)
+        element_fitness = 0
+        for j, k in enumerate(AM1_forces):
+            element_fitness += pow(k - DFT_forces[j], 2)
+        total_fitness += element_fitness
+    return total_fitness
 
 
 def find_energies(file_name):
@@ -81,52 +102,72 @@ def find_energies(file_name):
             energies.append(float(m[0]))
     return energies
 
+
+def find_energy_fitness(job_data):
+    total_fitness = 0
+    for i in range(job_data.ngeom):
+        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+        AM1_energies = find_energies(AM1_file)
+        DFT_energies = find_energies(DFT_file)
+        element_fitness = 0
+        for j, k in enumerate(AM1_energies):
+            element_fitness += pow(k - DFT_energies[j], 2)
+        total_fitness += element_fitness
+    return total_fitness
+
+
+def find_ground_fitness(job_data):
+    average_difference = 0
+    for i in range(job_data.ngeom):
+        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+        AM1_energy = find_ground_energy(AM1_file)
+        DFT_energy = find_ground_energy(DFT_file)
+        average_difference += (AM1_energy - DFT_energy) / job_data.ngeom
+    total_fitness = 0
+    for i in range(job_data.ngeom):
+        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+        AM1_energy = find_ground_energy(AM1_file)
+        DFT_energy = find_ground_energy(DFT_file)
+        total_fitness += pow((AM1_energy - DFT_energy) - average_difference, 2)
+    return total_fitness
+
+
+def find_ground_energy(file_name):
+    p_float = re.compile('\-?\d+\.\d+,?')
+    p_ground = re.compile('SCF Done')
+    f = open(file_name, 'r')
+    ground_energy = 0
+    for line in f:
+        if re.search(p_ground, line):
+            m = re.findall(p_float, line)
+            ground_energy = float(m[0])
+    f.close()
+    return ground_energy
+
 '''
  Use the fitness value from the original files,
  they will be used to normalize. If applying to the original
  file, simply ignore the last argument
  '''
-
-
-def find_fitness(am1_file_name, dft_file_name, initial="initial"):
-    am1_forces = find_forces(am1_file_name)
-    dft_forces = find_forces(dft_file_name)
-    am1_ground = find_ground_energy(am1_file_name)
-    dft_ground = find_ground_energy(dft_file_name)
-    am1_energies = find_energies(am1_file_name)
-    dft_energies = find_energies(dft_file_name)
-    raw_values = []
-
-    force_fitness = 0.0
-    for i, element in enumerate(am1_forces):
-        difference = element - dft_forces[i]
-        force_fitness += math.pow(difference, 2)
-    raw_values.append(force_fitness)
-
-    if initial == "initial":
-        raw_values.append(am1_ground - dft_ground)
+def find_fitness(job_data, initial="no"):
+    raw_fitness = []
+    raw_fitness.append(find_force_fitness(job_data))
+    raw_fitness.append(find_ground_fitness(job_data))
+    raw_fitness.append(find_energy_fitness(job_data))
+    if initial == "yes":
+        print('updating raw_fitness')
+        print(raw_fitness)
+        job_data.raw_fitness = raw_fitness
     else:
-        i = len(raw_values)
-        x = initial[i] - (am1_ground - dft_ground)
-        ground_fitness = 1/(1-x)
-        if ground_fitness > 0:
-            raw_values.append(ground_fitness)
-        else:
-            raw_values.append(10000)
-
-    energy_fitness = 0.0
-    for i, element in enumerate(am1_energies):
-        difference = element - dft_energies[i]
-        energy_fitness += math.pow(difference, 2)
-    raw_values.append(energy_fitness)
-
-    if initial == "initial":
-        return raw_values
-    else:
-        fitness_value = 0.0
-        for i, _ in enumerate(initial):
-            fitness_value += raw_values[i]/(initial[i] * len(initial))
-        return fitness_value
+        fitness = 0
+        num_fitness_params = len(raw_fitness)
+        for i in range(num_fitness_params):
+            fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
+                / num_fitness_params
+        return fitness
 
 
 def perturb_parameters(p_floats, mutation_rate, percent_change):
@@ -142,6 +183,28 @@ def perturb_parameters(p_floats, mutation_rate, percent_change):
     return pertubed_values
 
 
+def build_geometries(job):
+    original = job.original_am1
+    for i in range(job.ngeom):
+        perturbed_values = []
+        for element in original.coordinates[2]:
+            low_value = element - job.geo_prtb
+            high_value = element + job.geo_prtb
+            random_value = random.uniform(low_value, high_value)
+            perturbed_values.append(random_value)
+        old_spin = original.coordinates[0]
+        old_av = original.coordinates[1]
+        new_gemetry = perturbed_values
+        new_coordinates = (old_spin, old_av, new_gemetry)
+        job.coordinates.append(new_coordinates)
+        file_name = original.file_name + "_" + str(i) + ".com"
+        dft_name = job.original_dft + "_" + str(i) + ".com"
+        build_input(file_name, original.header, new_coordinates,
+                    original.params, original.p_floats)
+        build_input(dft_name, job.dft_header, new_coordinates,
+                    original.params, original.p_floats, "yes")
+
+
 def run_gaussian(file_name):
     p_segfault = re.compile('segmentation')
     input_file = file_name + '.com'
@@ -155,29 +218,21 @@ def run_gaussian(file_name):
         return stdout_value
 
 
-def mutate(job_data, thread_number):
-    print('Beginning thread:', thread_number)
-    current_p_floats = job_data.current_best[thread_number].p_floats
-    current_parameters = job_data.current_best[thread_number].params
-    coordinates = job_data.original_am1.coordinates
-    current_fitness = find_fitness(job_data.original_am1.output_file,
-                                   job_data.dft_output, job_data.raw_fitness)
-    current_file = job_data.file_name + 'AM1Test_' + str(thread_number)
-    for i in range(job_data.number_steps):
-        p_floats = perturb_parameters(current_p_floats, job_data.mutation_rate,
-                                      job_data.percent_change)
-        build_input(current_file + '.com', coordinates, current_parameters,
-                    p_floats)
-        run_gaussian(current_file)
-        fitness = find_fitness(current_file+'.log', job_data.dft_output,
-                               job_data.raw_fitness)
-        if fitness < current_fitness and fitness != 0:
-            current_fitness = fitness
-            current_p_floats = p_floats
-            print(current_fitness)
-    best_file = 'best_input' + str(thread_number)
-    build_input(best_file + '.com', coordinates, current_parameters,
-                current_p_floats)
-    run_gaussian(best_file)
-    job_data.current_best_fitness[thread_number] = current_fitness
-    job_data.current_best[thread_number].p_floats = current_p_floats
+def init_run(job_data, geometry_number):
+    AM1_file_name = job_data.file_name + "AM1_" + str(geometry_number)
+    run_gaussian(AM1_file_name)
+    DFT_file_name = job_data.file_name + "DFT_" + str(geometry_number)
+    run_gaussian(DFT_file_name)
+    return 0
+
+
+def mutate(job_data, geometry_number):
+    file_name = job_data.file_name + "AM1_" + str(geometry_number)
+    gene = job_data.geom_genes[geometry_number]
+    perturbed_values = perturb_parameters(gene.p_floats,
+                                          job_data.mutation_rate,
+                                          job_data.percent_change)
+    build_input(file_name + ".com", gene.header, gene.coordinates, gene.params,
+                perturbed_values)
+    run_gaussian(file_name)
+    return 0

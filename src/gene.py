@@ -7,35 +7,63 @@ class Gene:
         self.file_name = file_name
         self.input_file = file_name + '.com'
         self.output_file = file_name + '.log'
-        self.coordinates = self.read_coordinates()
+        self.header = self.__read_header()
+        # A tuple of spin, atom_value, coordinates
+        self.coordinates = self.__read_coordinates()
         # Params are the chunks of text including the parameter values,
         # and remains constant throughout the program
-        self.params = self.read_parameters()
+        self.params = self.__read_parameters()
         # p_floats are the parameter values which will vary among the genes
-        self.p_floats = self.extract_floats()
+        self.p_floats = self.__extract_floats()
 
+    def __read_header(self):
+        p_blank = re.compile('^\s*$')
+        blank_count = 0
+        header_lines = ''
+        f = open(self.input_file, 'r')
+        for line in f:
+            if blank_count < 2:
+                header_lines += line
+            if re.search(p_blank, line):
+                blank_count += 1
+            if blank_count == 2:
+                break
+        f.close()
+        return header_lines
 
-    def read_coordinates(self):
+    def __read_coordinates(self):
         # Patterns
         p_blank = re.compile('^\s*$')
         p_float = re.compile('\-?\d+\.\d+')
         p_integer = re.compile("\\b(\d)\s")
         blank_count = 0
-        lines = ''
+        atom_count = 0
+        atom_value = []
+        coordinates = []
         f = open(self.input_file, 'r')
-        for line  in f:
-            if blank_count < 3:
-                lines += line
+        for line in f:
+            if blank_count == 2 and atom_count == 0:
+                spin = line
+                atom_count += 1
+            elif blank_count == 2 and atom_count > 0:
+                if re.search(p_integer, line):
+                    m = re.findall(p_integer, line)
+                    atom_value.append(float(m[0]))
+                if re.search(p_float, line):
+                    n = re.findall(p_float, line)
+                    for i in n:
+                        coordinates.append(float(i))
+                atom_count += 1
             if re.search(p_blank, line):
                 blank_count += 1
-            if blank_count == 3:
+            if blank_count > 2:
                 break
         f.close()
-        lines = lines[:-1]
-        return lines
+        return spin, atom_value, coordinates
 
-    # read_parameters returns a list of [parameter word, line_number, and number of float parameters]
-    def read_parameters(self):
+    # read_parameters returns a list of [parameter word, line_number,
+    # and number of float parameters]
+    def __read_parameters(self):
         # Patterns
         p_blank = re.compile('^\s*$')
         p_param = re.compile('\S+')
@@ -53,12 +81,13 @@ class Gene:
                 m = re.findall(p_param, line)
                 for element in m:
                     l_floats = re.findall(p_float, element)
-                    if re.search(p_eheat, element) or re.search(p_EISol, element):
+                    if (re.search(p_eheat, element) or
+                            re.search(p_EISol, element)):
                         l_floats = []
                     am1_params.append([element, i, len(l_floats)])
         return am1_params
 
-    def extract_floats(self):
+    def __extract_floats(self):
         # Patterns
         p_float = re.compile('\-?\d+\.\d+')
 

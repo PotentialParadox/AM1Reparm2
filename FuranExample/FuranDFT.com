@@ -1,4 +1,4 @@
-#P B3LYP/cc-pVTZ CIS(Singlets,NStates=15) pop(full) force
+#P B3LYP/3-21G CIS(Singlets,NStates=15) pop(full) force
 
 FuranDFT
 
