@@ -117,6 +117,19 @@ def find_energy_fitness(job_data):
     return total_fitness
 
 
+def find_ground_energy(file_name):
+    p_float = re.compile('\-?\d+\.\d+,?')
+    p_ground = re.compile('SCF Done')
+    f = open(file_name, 'r')
+    ground_energy = 0
+    for line in f:
+        if re.search(p_ground, line):
+            m = re.findall(p_float, line)
+            ground_energy = float(m[0])
+    f.close()
+    return ground_energy
+
+
 def find_ground_fitness(job_data):
     average_difference = 0
     for i in range(job_data.ngeom):
@@ -135,39 +148,33 @@ def find_ground_fitness(job_data):
     return total_fitness
 
 
-def find_ground_energy(file_name):
-    p_float = re.compile('\-?\d+\.\d+,?')
-    p_ground = re.compile('SCF Done')
-    f = open(file_name, 'r')
-    ground_energy = 0
-    for line in f:
-        if re.search(p_ground, line):
-            m = re.findall(p_float, line)
-            ground_energy = float(m[0])
-    f.close()
-    return ground_energy
-
-'''
- Use the fitness value from the original files,
- they will be used to normalize. If applying to the original
- file, simply ignore the last argument
- '''
+# Use the fitness value from the original files,
+# they will be used to normalize. If applying to the original
+# file, simply ignore the last argument
 def find_fitness(job_data, initial="no"):
+    fout = open(job_data.file_name + ".out", "a")
     raw_fitness = []
-    raw_fitness.append(find_force_fitness(job_data))
+    # raw_fitness.append(find_force_fitness(job_data))
     raw_fitness.append(find_ground_fitness(job_data))
     raw_fitness.append(find_energy_fitness(job_data))
     if initial == "yes":
-        print('updating raw_fitness')
-        print(raw_fitness)
+        fout.write('updating raw_fitness ')
+        fout.write(str(raw_fitness)+"\n")
         job_data.raw_fitness = raw_fitness
+        # fout.write(str(raw_fitness[0]/job_data.raw_fitness[0])+"\n")
     else:
         fitness = 0
         num_fitness_params = len(raw_fitness)
-        for i in range(num_fitness_params):
-            fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
-                / num_fitness_params
+        # fout.write(str(raw_fitness[0])+"\n")
+        if len(raw_fitness) == len(job_data.raw_fitness):
+            for i in range(num_fitness_params):
+                fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
+                    / num_fitness_params
+        else:
+            fout.write("Gaussian Failure Found")
+            fitness = 1000
         return fitness
+    fout.close()
 
 
 def perturb_parameters(p_floats, mutation_rate, percent_change):
@@ -206,33 +213,77 @@ def build_geometries(job):
 
 
 def run_gaussian(file_name):
-    p_segfault = re.compile('segmentation')
+    p_normal = re.compile('Normal termination')
     input_file = file_name + '.com'
     output_file = file_name + '.log'
     proc = subprocess.Popen(['g09', input_file, output_file],
                             stderr=subprocess.PIPE,)
     stdout_value = proc.communicate()[1]
-    if re.search(p_segfault, str(stdout_value)):
-        return 'Fail'
-    else:
+    if re.search(p_normal, str(stdout_value)):
         return stdout_value
+    else:
+        return 'Fail'
 
 
 def init_run(job_data, geometry_number):
+    fout = open(job_data.file_name + ".out", "a")
     AM1_file_name = job_data.file_name + "AM1_" + str(geometry_number)
-    run_gaussian(AM1_file_name)
+    fout.write('running ' + AM1_file_name + '\n')
+    result = run_gaussian(AM1_file_name)
+    if result == 'fail':
+        fout.write("Gaussian Failuer")
     DFT_file_name = job_data.file_name + "DFT_" + str(geometry_number)
-    run_gaussian(DFT_file_name)
+    fout.write('running ' + DFT_file_name + '\n')
+    result = run_gaussian(DFT_file_name)
+    if result == 'fail':
+        fout.write("Gaussian Failuer")
+    fout.close()
     return 0
 
 
 def mutate(job_data, geometry_number):
+    fout = open(job_data.file_name + ".out", "a")
     file_name = job_data.file_name + "AM1_" + str(geometry_number)
-    gene = job_data.geom_genes[geometry_number]
-    perturbed_values = perturb_parameters(gene.p_floats,
-                                          job_data.mutation_rate,
-                                          job_data.percent_change)
-    build_input(file_name + ".com", gene.header, gene.coordinates, gene.params,
-                perturbed_values)
-    run_gaussian(file_name)
-    return 0
+    # fout.write('running' + file_name + '\n')
+    gausReturn = run_gaussian(file_name)
+    fout.close()
+    return gausReturn
+
+
+def cleanup(job_data):
+    ngeom = job_data.ngeom
+    for i in range(ngeom):
+        # Delete the obsolete files
+        am1 = job_data.file_name + "AM1_" + str(i)
+        dft = job_data.file_name + "DFT_" + str(i)
+        inputAM1 = am1 + ".com"
+        outputAM1 = am1 + ".log"
+        inputDFT = dft + ".com"
+        outputDFT = dft + ".log"
+        subprocess.call(["rm", inputAM1])
+        subprocess.call(["rm", outputAM1])
+        subprocess.call(["rm", inputDFT])
+        subprocess.call(["rm", outputDFT])
+        # Upload the best input as a string
+        bestInput = job_data.file_name + "AM1_" + str(i) + "best.com"
+        fin = open(bestInput, 'r')
+        p_firstLine = re.compile('#P')
+        inputString = ""
+        if i < 9:
+            for line in fin:
+                # Modify the first line
+                if re.search(p_firstLine, line):
+                    optHeader = '#P AM1(Input,print) Opt Freq\n'
+                    inputString += optHeader
+                else:
+                    inputString += line
+            outFile = job_data.file_name + "AM1Best" + str(i) + ".com"
+            fout = open(outFile, 'w')
+            fout.write(inputString)
+        subprocess.call(["rm", bestInput])
+    if ngeom > 8:
+        ngeom = 8
+    for i in range(ngeom):
+        result = run_gaussian(job_data.file_name + "AM1Best" + str(i))
+        if result == 'fail':
+            fout.write("Gaussian Failuer")

@@ -16,6 +16,7 @@ class Job:
         self.raw_fitness = []
         self.coordinates = []
         self.geom_genes = []
+        self.pop_params = []
         self.number_steps = number_steps
         self.mutation_rate = mutation_rate
         self.percent_change = percent_change
