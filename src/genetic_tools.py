@@ -47,7 +47,8 @@ def build_input(file_name, header, coordinates,
                 if i == float_count:
                     parameter_string += '{0:f}'.format(parameter_floats[i])
                 else:
-                    parameter_string += ',' + '{0:f}'.format(parameter_floats[i])
+                    parameter_string += ',' \
+                        + '{0:f}'.format(parameter_floats[i])
             float_count += params[2]
 
         f.write(parameter_string)
@@ -151,13 +152,13 @@ def find_ground_fitness(job_data):
 # Use the fitness value from the original files,
 # they will be used to normalize. If applying to the original
 # file, simply ignore the last argument
-def find_fitness(job_data, initial="no"):
+def find_fitness(job_data, initial=False):
     fout = open(job_data.file_name + ".out", "a")
     raw_fitness = []
     # raw_fitness.append(find_force_fitness(job_data))
     raw_fitness.append(find_ground_fitness(job_data))
     raw_fitness.append(find_energy_fitness(job_data))
-    if initial == "yes":
+    if initial:
         fout.write('updating raw_fitness ')
         fout.write(str(raw_fitness)+"\n")
         job_data.raw_fitness = raw_fitness
@@ -231,12 +232,12 @@ def init_run(job_data, geometry_number):
     fout.write('running ' + AM1_file_name + '\n')
     result = run_gaussian(AM1_file_name)
     if result == 'fail':
-        fout.write("Gaussian Failuer")
+        fout.write("Gaussian Failure")
     DFT_file_name = job_data.file_name + "DFT_" + str(geometry_number)
     fout.write('running ' + DFT_file_name + '\n')
     result = run_gaussian(DFT_file_name)
     if result == 'fail':
-        fout.write("Gaussian Failuer")
+        fout.write("Gaussian Failure")
     fout.close()
     return 0
 
@@ -248,6 +249,18 @@ def mutate(job_data, geometry_number):
     gausReturn = run_gaussian(file_name)
     fout.close()
     return gausReturn
+
+
+def duplicate_geometries(job_data):
+    ngeom = job_data.ngeom
+    population = job_data.population
+    for i in range(ngeom):
+        for j in range(population):
+            am1O = job_data.file_name + "AM1_" + str(i) + ".com"
+            am1C = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(j) + ".com"
+            subprocess.call(["cp", am1O, am1C])
+    return 0
 
 
 def cleanup(job_data):
