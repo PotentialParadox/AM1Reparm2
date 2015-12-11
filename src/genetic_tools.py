@@ -104,18 +104,32 @@ def find_energies(file_name):
     return energies
 
 
-def find_energy_fitness(job_data):
-    total_fitness = 0
-    for i in range(job_data.ngeom):
-        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
-        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
-        AM1_energies = find_energies(AM1_file)
-        DFT_energies = find_energies(DFT_file)
-        element_fitness = 0
-        for j, k in enumerate(AM1_energies):
-            element_fitness += pow(k - DFT_energies[j], 2)
-        total_fitness += element_fitness
-    return total_fitness
+def find_energy_fitness(job_data, initial, group):
+    if initial:
+        total_fitness = 0
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_energies = find_energies(AM1_file)
+            DFT_energies = find_energies(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_energies):
+                element_fitness += pow(k - DFT_energies[j], 2)
+            total_fitness += element_fitness
+        return total_fitness
+    else:
+        total_fitness = 0
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(group) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_energies = find_energies(AM1_file)
+            DFT_energies = find_energies(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_energies):
+                element_fitness += pow(k - DFT_energies[j], 2)
+            total_fitness += element_fitness
+        return total_fitness
 
 
 def find_ground_energy(file_name):
@@ -131,48 +145,81 @@ def find_ground_energy(file_name):
     return ground_energy
 
 
-def find_ground_fitness(job_data):
-    average_difference = 0
-    for i in range(job_data.ngeom):
-        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
-        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
-        AM1_energy = find_ground_energy(AM1_file)
-        DFT_energy = find_ground_energy(DFT_file)
-        average_difference += (AM1_energy - DFT_energy) / job_data.ngeom
-    total_fitness = 0
-    for i in range(job_data.ngeom):
-        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
-        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
-        AM1_energy = find_ground_energy(AM1_file)
-        DFT_energy = find_ground_energy(DFT_file)
-        total_fitness += pow((AM1_energy - DFT_energy) - average_difference, 2)
-    return total_fitness
+def find_ground_fitness(job_data, initial, group):
+    if initial:
+        # In order to keep scale, we measure the energies as
+        # the value away from their averages
+        averageAM1 = 0
+        averageDFT = 0
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            averageAM1 += find_ground_energy(AM1_file)/job_data.ngeom
+            averageDFT += find_ground_energy(DFT_file)/job_data.ngeom
+        AM1Energies = []
+        DFTEnergies = []
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1Energies.append(find_ground_energy(AM1_file) - averageAM1)
+            DFTEnergies.append(find_ground_energy(DFT_file) - averageDFT)
+        totalFitness = 0
+        for i in range(job_data.ngeom):
+            totalFitness += pow(AM1Energies[i] - DFTEnergies[i], 2)
+        return totalFitness
+    else:
+        averageAM1 = 0
+        averageDFT = 0
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(group) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            averageAM1 += find_ground_energy(AM1_file)/job_data.ngeom
+            averageDFT += find_ground_energy(DFT_file)/job_data.ngeom
+        AM1Energies = []
+        DFTEnergies = []
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(group) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1Energies.append(find_ground_energy(AM1_file) - averageAM1)
+            DFTEnergies.append(find_ground_energy(DFT_file) - averageDFT)
+        totalFitness = 0
+        for i in range(job_data.ngeom):
+            totalFitness += pow(AM1Energies[i] - DFTEnergies[i], 2)
+        return totalFitness
 
 
 # Use the fitness value from the original files,
 # they will be used to normalize. If applying to the original
 # file, simply ignore the last argument
-def find_fitness(job_data, initial=False):
+def find_fitness(job_data, initial=False, group=0):
     fout = open(job_data.file_name + ".out", "a")
-    raw_fitness = []
-    # raw_fitness.append(find_force_fitness(job_data))
-    raw_fitness.append(find_ground_fitness(job_data))
-    raw_fitness.append(find_energy_fitness(job_data))
     if initial:
+        raw_fitness = []
+        # raw_fitness.append(find_force_fitness(job_data, initial, group))
+        raw_fitness.append(find_ground_fitness(job_data, initial, group))
+        raw_fitness.append(find_energy_fitness(job_data, initial, group))
         fout.write('updating raw_fitness ')
         fout.write(str(raw_fitness)+"\n")
         job_data.raw_fitness = raw_fitness
         # fout.write(str(raw_fitness[0]/job_data.raw_fitness[0])+"\n")
     else:
+        raw_fitness = []
+        # raw_fitness.append(find_force_fitness(job_data, initial, group))
+        raw_fitness.append(find_ground_fitness(job_data, initial, group))
+        raw_fitness.append(find_energy_fitness(job_data, initial, group))
         fitness = 0
         num_fitness_params = len(raw_fitness)
-        # fout.write(str(raw_fitness[0])+"\n")
+        # fout.write(str(num_fitness_params) + "\n")
+        # fout.write(str(job_data.raw_fitness) + "\n")
+        fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
         if len(raw_fitness) == len(job_data.raw_fitness):
             for i in range(num_fitness_params):
                 fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
                     / num_fitness_params
         else:
-            fout.write("Gaussian Failure Found")
+            # fout.write("Gaussian Failure Found")
             fitness = 1000
         return fitness
     fout.close()
@@ -242,9 +289,10 @@ def init_run(job_data, geometry_number):
     return 0
 
 
-def mutate(job_data, geometry_number):
+def mutate(job_data, geometry_number, group):
     fout = open(job_data.file_name + ".out", "a")
-    file_name = job_data.file_name + "AM1_" + str(geometry_number)
+    file_name = job_data.file_name + "AM1_" + str(geometry_number) \
+        + "P" + str(group)
     # fout.write('running' + file_name + '\n')
     gausReturn = run_gaussian(file_name)
     fout.close()
@@ -261,6 +309,77 @@ def duplicate_geometries(job_data):
                 + "P" + str(j) + ".com"
             subprocess.call(["cp", am1O, am1C])
     return 0
+
+
+# Converts the array of population fitnesses into an
+# array corresponding to the chance of survial
+# [0, %chance of P0, %chance of P1, ... 1-%chance of PN]
+def fit2Survival(pop):
+    normalizer = 0
+    for p in pop:
+        normalizer += 1/pow(p, 2)
+    rankings = [0]
+    for i in range(len(pop) - 1):
+        chance = (1 / (pow(pop[i], 2))) / normalizer
+        rankings.append(chance + rankings[i])
+    return rankings
+
+
+# Randomly select the survivors, with the weights
+# determined by the fit2Survival function
+def survivor(job_data, pop):
+    nSurvivors = int(len(pop)*job_data.survival_chance)
+    rankings = fit2Survival(pop)
+    survivors = []
+    for i in range(nSurvivors):
+        found = False
+        while not found:
+            r = random.uniform(0, 1)
+            for j, p in enumerate(rankings):
+                if p >= r and (j-1) not in survivors:
+                    survivors.append(j-1)
+                    found = True
+                    break
+            if not found and (len(rankings)-1) not in survivors:
+                survivors.append(len(rankings)-1)
+                found = True
+    return survivors
+
+
+# Mixes the parameters from population a, and population b
+def mate(job_data, a, b):
+    pFloatsA = job_data.genes[a][0].p_floats
+    pFloatsB = job_data.genes[b][0].p_floats
+    new_p_floats = []
+    for i in range(len(pFloatsA)):
+        r = random.randint(0, 1)
+        if r == 0:
+            new_p_floats.append(pFloatsA[i])
+        else:
+            new_p_floats.append(pFloatsB[i])
+    return new_p_floats
+
+
+# Let the populations breed with one another to create a new
+# generation
+def breed(job_data, survivors):
+    descendant_pFloats = []
+    for i in range(job_data.population):
+        r1 = random.randint(0, len(survivors) - 1)
+        different = False
+        while not different:
+            r2 = random.randint(0, len(survivors) - 1)
+            if r2 != r1:
+                different = True
+        survivor1 = survivors[r1]
+        survivor2 = survivors[r2]
+        p_floats = mate(job_data, survivor1, survivor2)
+        descendant_pFloats.append(p_floats)
+    # Update the gene_0s, which are used to store parameter data
+    for i, p in enumerate(descendant_pFloats):
+        # print(job_data.genes[i][0].p_floats)
+        job_data.set_gene_p_floats(i, 0, p)
+        # print(job_data.genes[i][0].p_floats)
 
 
 def cleanup(job_data):

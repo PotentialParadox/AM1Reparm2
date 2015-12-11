@@ -16,6 +16,9 @@ class Gene:
         # p_floats are the parameter values which will vary among the genes
         self.p_floats = self.__extract_floats()
 
+    def set_p_floats(self, p):
+        self.p_floats = p
+
     def __read_header(self):
         p_blank = re.compile('^\s*$')
         blank_count = 0

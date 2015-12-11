@@ -6,7 +6,7 @@ class Job:
 
     def __init__(self, file_name, number_steps=100,
                  mutation_rate=0.1, percent_change=0.1, nproc=1,
-                 ngeom=4, geo_prtb=0.1, population=1):
+                 ngeom=4, geo_prtb=0.1, population=1, survival_chance=0.5):
         self.file_name = file_name
         self.original_am1 = Gene(file_name + 'AM1')
         self.original_dft = file_name + 'DFT'
@@ -23,6 +23,7 @@ class Job:
         self.nproc = nproc
         self.ngeom = ngeom
         self.population = population
+        self.survival_chance = survival_chance
         self.geo_prtb = geo_prtb  # percent variation of geometry pertubation
         # Current_best is a list of the best Genes(refer to class)
         # made by the threads
@@ -35,6 +36,9 @@ class Job:
                     + "P" + str(i)
                 duplicate.append(Gene(coord_name))
             self.genes.append(duplicate)
+
+    def set_gene_p_floats(self, i, j, p):
+        self.genes[i][j].set_p_floats(p)
 
     def read_dft_header(self):
         p_blank = re.compile('^\s*$')

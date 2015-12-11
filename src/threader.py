@@ -18,23 +18,23 @@ class Thread:
     def threader(self, thread_number):
         while True:
             thread_info = self.q1.get()
-            gt.mutate(thread_info[0], thread_info[1])
+            gt.mutate(thread_info[0], thread_info[1], thread_info[2])
             self.lock.acquire()
             # fout = open(self.file_name + ".out", 'a')
             # fout.write(self.file_name + "_" + str(thread_info[1])
-                       # + " complete\n")
+            # + " complete\n")
             # fout.close()
             self.lock.release()
             self.q1.task_done()
 
-    def thread_evolve(self, job):
+    def thread_evolve(self, job, group):
         self.q1 = Queue(self.ngeom)
         for x in range(self.nproc):
             t = threading.Thread(target=self.threader, args=(x,))
             t.setDaemon(True)
             t.start()
         for i in range(self.ngeom):
-            thread_info = (job, i)
+            thread_info = (job, i, group)
             self.q1.put(thread_info)
         self.q1.join()
 
