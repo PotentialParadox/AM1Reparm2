@@ -6,7 +6,8 @@ class Job:
 
     def __init__(self, file_name, number_steps=100,
                  mutation_rate=0.1, percent_change=0.1, nproc=1,
-                 ngeom=4, geo_prtb=0.1, population=1, survival_chance=0.5):
+                 ngeom=4, geo_prtb=0.1, population=1, survival_chance=0.5,
+                 elites=0):
         self.file_name = file_name
         self.original_am1 = Gene(file_name + 'AM1')
         self.original_dft = file_name + 'DFT'
@@ -24,6 +25,8 @@ class Job:
         self.ngeom = ngeom
         self.population = population
         self.survival_chance = survival_chance
+        self.best_gene = Gene(file_name + 'AM1')
+        self.elites = elites
         self.geo_prtb = geo_prtb  # percent variation of geometry pertubation
         # Current_best is a list of the best Genes(refer to class)
         # made by the threads

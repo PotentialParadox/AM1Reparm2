@@ -19,6 +19,9 @@ class Gene:
     def set_p_floats(self, p):
         self.p_floats = p
 
+    def set_file_name(self, name):
+        self.file_name = name
+
     def __read_header(self):
         p_blank = re.compile('^\s*$')
         blank_count = 0

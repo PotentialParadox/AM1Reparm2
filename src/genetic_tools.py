@@ -1,5 +1,6 @@
 import re
-# from gene import Gene
+from threader import Thread
+from gene import Gene
 import subprocess
 import random
 
@@ -213,7 +214,7 @@ def find_fitness(job_data, initial=False, group=0):
         num_fitness_params = len(raw_fitness)
         # fout.write(str(num_fitness_params) + "\n")
         # fout.write(str(job_data.raw_fitness) + "\n")
-        fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
+        # fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
         if len(raw_fitness) == len(job_data.raw_fitness):
             for i in range(num_fitness_params):
                 fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
@@ -311,23 +312,67 @@ def duplicate_geometries(job_data):
     return 0
 
 
+# Split the population into the elites, who can clone themselves, abiet
+# with minor mutations and the peasants, who must fight to the
+# death to determine who remains
+def wealthGap(job_data, popfits):
+    nElites = job_data.elites
+    sortedPop = sorted(popfits, key=lambda x: x[1])
+    # Determine the elites
+    elites = sortedPop[:nElites]
+    peasants = sortedPop[nElites:]
+    return (elites, peasants)
+
+
+# The elite clone themselves, but it backfires, and the slightly mutated
+# clones attempt to kill their creators. Only the strongest survive.
+def clone(job_data, elites):
+    new_elites = elites
+    for i, p in enumerate(elites):
+        gene_0 = job_data.genes[p[0]][0]
+        old_fitness = p[1]
+        perturbed_values = perturb_parameters(gene_0.p_floats,
+                                              job_data.mutation_rate,
+                                              job_data.percent_change)
+        for g in range(job_data.ngeom):
+            file_name = job_data.file_name + "AM1_" + str(g) \
+                + "P" + str(p[0])
+            gene = job_data.genes[p[0]][g]
+            build_input(file_name + ".com", gene.header,
+                        gene.coordinates, gene.params, perturbed_values)
+            job_data.genes[p[0]][g] = Gene(file_name)
+        # Run the jobs in parallel
+        evThread = Thread(job_data)
+        evThread.thread_evolve(job_data, p[0])
+        fitness = find_fitness(job_data, False, p[0])
+        # Either the clone or host survives
+        if fitness > old_fitness:
+            job_data.genes[p[0]][0] = gene_0
+        else:
+            new_elites[i] = (p[0], fitness)
+    return sorted(new_elites, key=lambda x: x[1])
+
+
 # Converts the array of population fitnesses into an
 # array corresponding to the chance of survial
 # [0, %chance of P0, %chance of P1, ... 1-%chance of PN]
 def fit2Survival(pop):
     normalizer = 0
     for p in pop:
-        normalizer += 1/pow(p, 2)
+        normalizer += 1/pow(p, 3)
     rankings = [0]
     for i in range(len(pop) - 1):
-        chance = (1 / (pow(pop[i], 2))) / normalizer
+        chance = (1 / (pow(pop[i], 3))) / normalizer
         rankings.append(chance + rankings[i])
     return rankings
 
 
-# Randomly select the survivors, with the weights
-# determined by the fit2Survival function
-def survivor(job_data, pop):
+# Peasant fight for surivor, randomly select the survivors
+# weighted by their fitness
+def survivor(job_data, peasants):
+    pop = []
+    for p in peasants:
+        pop.append(p[1])
     nSurvivors = int(len(pop)*job_data.survival_chance)
     rankings = fit2Survival(pop)
     survivors = []
@@ -336,17 +381,19 @@ def survivor(job_data, pop):
         while not found:
             r = random.uniform(0, 1)
             for j, p in enumerate(rankings):
-                if p >= r and (j-1) not in survivors:
-                    survivors.append(j-1)
+                if p >= r and peasants[j-1] not in survivors:
+                    survivor = peasants[j-1]
+                    survivors.append(survivor)
                     found = True
                     break
             if not found and (len(rankings)-1) not in survivors:
-                survivors.append(len(rankings)-1)
+                survivor = peasants[len(rankings)-1]
+                survivors.append(survivor)
                 found = True
-    return survivors
+    return sorted(survivors, key=lambda x: x[1])
 
 
-# Mixes the parameters from population a, and population b
+# Mixe the parameters from population a and population b
 def mate(job_data, a, b):
     pFloatsA = job_data.genes[a][0].p_floats
     pFloatsB = job_data.genes[b][0].p_floats
@@ -360,32 +407,84 @@ def mate(job_data, a, b):
     return new_p_floats
 
 
+def select_parent(parents):
+    selected = 0
+    pop = []
+    for p in parents:
+        pop.append(p[1])
+    rankings = fit2Survival(pop)
+    r = random.uniform(0, 1)
+    for i, rank in enumerate(rankings):
+        if rank >= r:
+            selected = i - 1
+            break
+    return selected
+
+
 # Let the populations breed with one another to create a new
 # generation
-def breed(job_data, survivors):
-    descendant_pFloats = []
-    for i in range(job_data.population):
-        r1 = random.randint(0, len(survivors) - 1)
+def breed(job_data, elites, peasants):
+    new_genes = []
+    parents = elites + peasants
+    print(parents)
+    # The elite get to pass their genes directly
+    for e in elites:
+        file_name = job_data.genes[e[0]][0].file_name
+        gene = Gene(file_name)
+        new_genes.append(gene)
+    # Now let everyone randomly mate with one another,
+    # using the fitness as the chance of mating
+    for i in range(job_data.population - job_data.elites):
+        file_name = job_data.genes[0][0].file_name
+        gene = Gene(file_name)
+        r1 = select_parent(parents)
         different = False
         while not different:
-            r2 = random.randint(0, len(survivors) - 1)
+            r2 = select_parent(parents)
             if r2 != r1:
                 different = True
-        survivor1 = survivors[r1]
-        survivor2 = survivors[r2]
-        p_floats = mate(job_data, survivor1, survivor2)
-        descendant_pFloats.append(p_floats)
-    # Update the gene_0s, which are used to store parameter data
-    for i, p in enumerate(descendant_pFloats):
-        # print(job_data.genes[i][0].p_floats)
-        job_data.set_gene_p_floats(i, 0, p)
-        # print(job_data.genes[i][0].p_floats)
+        parent1 = parents[r1]
+        parent2 = parents[r2]
+        p_floats = mate(job_data, parent1[0], parent2[0])
+        gene.p_floats = p_floats
+        new_genes.append(gene)
+    # Update the naming
+    for i, n in enumerate(new_genes):
+        n.file_name = job_data.file_name + "AM1_0P" + str(i)
+        build_input(n.file_name + ".com", n.header, n.coordinates,
+                    n.params, n.p_floats)
 
 
+# Optimize the best gene
+def runBest(job_data):
+    gene = job_data.best_gene
+    bestInput = job_data.file_name + "BestInput.com"
+    build_input(bestInput, gene.header,
+                gene.coordinates, gene.params, gene.p_floats)
+    fin = open(bestInput, "r")
+    p_firstLine = re.compile('#P')
+    inputString = ""
+    for line in fin:
+        # Modify the first line
+        if re.search(p_firstLine, line):
+            optHeader = '#P AM1(Input,print) Opt Freq\n'
+            inputString += optHeader
+        else:
+            inputString += line
+    fin.close()
+    fout = open(bestInput, 'w')
+    fout.write(inputString)
+    fout.close()
+    run_gaussian(job_data.file_name + "BestInput")
+    subprocess.call(["rm", bestInput])
+
+
+# Delete the obsolete files
 def cleanup(job_data):
     ngeom = job_data.ngeom
+    npop = job_data.population
+    # Original Files
     for i in range(ngeom):
-        # Delete the obsolete files
         am1 = job_data.file_name + "AM1_" + str(i)
         dft = job_data.file_name + "DFT_" + str(i)
         inputAM1 = am1 + ".com"
@@ -396,26 +495,11 @@ def cleanup(job_data):
         subprocess.call(["rm", outputAM1])
         subprocess.call(["rm", inputDFT])
         subprocess.call(["rm", outputDFT])
-        # Upload the best input as a string
-        bestInput = job_data.file_name + "AM1_" + str(i) + "best.com"
-        fin = open(bestInput, 'r')
-        p_firstLine = re.compile('#P')
-        inputString = ""
-        if i < 9:
-            for line in fin:
-                # Modify the first line
-                if re.search(p_firstLine, line):
-                    optHeader = '#P AM1(Input,print) Opt Freq\n'
-                    inputString += optHeader
-                else:
-                    inputString += line
-            outFile = job_data.file_name + "AM1Best" + str(i) + ".com"
-            fout = open(outFile, 'w')
-            fout.write(inputString)
-        subprocess.call(["rm", bestInput])
-    if ngeom > 8:
-        ngeom = 8
-    for i in range(ngeom):
-        result = run_gaussian(job_data.file_name + "AM1Best" + str(i))
-        if result == 'fail':
-            fout.write("Gaussian Failuer")
+    # GA Files
+        for j in range(npop):
+            am1 = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(j)
+            inputAM1 = am1 + ".com"
+            outputAM1 = am1 + ".log"
+            subprocess.call(["rm", inputAM1])
+            subprocess.call(["rm", outputAM1])
