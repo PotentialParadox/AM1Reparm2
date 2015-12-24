@@ -52,32 +52,36 @@ def run_genetic_algorithm(job_data):
             # Run the jobs in parallel
             evThread = Thread(job_data)
             evThread.thread_evolve(job_data, p)
-            fitness = gt.find_fitness(job_data, False, p)
+            (fitness, raw_fitness) = gt.find_fitness(job_data, False, p)
             if fitness < best_fitness:
                 best_fitness = fitness
-                fout.write("New Best Found from population " + str(p)
+                fout.write("New Best Found "
                            + ": " + str(fitness) + "\n")
+                fout.write("With raw values: " + str(raw_fitness) + "\n")
                 job_data.best_gene = job_data.genes[p][0]
             populationFitnesses.append((p, fitness))
-        average_fit = sum(populationFitnesses[1])/len(populationFitnesses[1])
+        fitnessValues = []
+        for v in populationFitnesses:
+            fitnessValues.append(v[1])
+        average_fit = sum(fitnessValues)/len(fitnessValues)
         fout.write("AVERAGE FITNESS: " + str(average_fit) + "\n")
         print("AVERAGE FITNESS: " + str(average_fit))
         # Both elites and peasant are tuples of (popIndex, fitness)
+        print("Population")
+        print(populationFitnesses)
+        print("**********")
         (elites, peasants) = gt.wealthGap(job_data, populationFitnesses)
         elites = gt.clone(job_data, elites)
         peasants = gt.survivor(job_data, peasants)
         gt.breed(job_data, elites, peasants)
-        for i in range(job_data.population):
-            file_name = job_data.file_name + "AM1_0P" + str(i)
-            job_data.genes[i][0] = Gene(file_name)
         fout.close()
 
 
 start = time.time()
 file_name = 'Furan'
-ji = Job(file_name, number_steps=100, ngeom=100, nproc=4,
-         mutation_rate=.10, percent_change=.10, geo_prtb=0.05, population=12,
-         survival_chance=0.5, elites=2)
+ji = Job(file_name, number_steps=10, ngeom=4, nproc=4,
+         mutation_rate=.10, percent_change=.20, geo_prtb=0.025, population=12,
+         survival_chance=0.50, elites=2)
 run_genetic_algorithm(ji)
 fout = open(file_name + '.out', 'a')
 fout.write('Optimize best\n')

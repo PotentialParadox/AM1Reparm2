@@ -79,17 +79,35 @@ def find_forces(file_name):
     return forces
 
 
-def find_force_fitness(job_data):
+def find_force_fitness(job_data, initial, group):
     total_fitness = 0
-    for i in range(job_data.ngeom):
-        AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
-        DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
-        AM1_forces = find_forces(AM1_file)
-        DFT_forces = find_forces(DFT_file)
-        element_fitness = 0
-        for j, k in enumerate(AM1_forces):
-            element_fitness += pow(k - DFT_forces[j], 2)
-        total_fitness += element_fitness
+    if initial:
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_forces = find_forces(AM1_file)
+            DFT_forces = find_forces(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_forces):
+                element_fitness += pow(k - DFT_forces[j], 2)
+            if len(AM1_forces) == len(DFT_forces):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
+    else:
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(group) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_forces = find_forces(AM1_file)
+            DFT_forces = find_forces(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_forces):
+                element_fitness += pow(k - DFT_forces[j], 2)
+            if len(AM1_forces) == len(DFT_forces):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
     return total_fitness
 
 
@@ -116,7 +134,10 @@ def find_energy_fitness(job_data, initial, group):
             element_fitness = 0
             for j, k in enumerate(AM1_energies):
                 element_fitness += pow(k - DFT_energies[j], 2)
-            total_fitness += element_fitness
+            if len(AM1_energies) == len(DFT_energies):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
         return total_fitness
     else:
         total_fitness = 0
@@ -129,7 +150,10 @@ def find_energy_fitness(job_data, initial, group):
             element_fitness = 0
             for j, k in enumerate(AM1_energies):
                 element_fitness += pow(k - DFT_energies[j], 2)
-            total_fitness += element_fitness
+            if len(AM1_energies) == len(DFT_energies):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
         return total_fitness
 
 
@@ -167,6 +191,8 @@ def find_ground_fitness(job_data, initial, group):
         totalFitness = 0
         for i in range(job_data.ngeom):
             totalFitness += pow(AM1Energies[i] - DFTEnergies[i], 2)
+        if totalFitness == 0:
+            totalFitness = 1000
         return totalFitness
     else:
         averageAM1 = 0
@@ -188,6 +214,8 @@ def find_ground_fitness(job_data, initial, group):
         totalFitness = 0
         for i in range(job_data.ngeom):
             totalFitness += pow(AM1Energies[i] - DFTEnergies[i], 2)
+        if totalFitness == 0:
+            totalFitness = 1000
         return totalFitness
 
 
@@ -198,7 +226,7 @@ def find_fitness(job_data, initial=False, group=0):
     fout = open(job_data.file_name + ".out", "a")
     if initial:
         raw_fitness = []
-        # raw_fitness.append(find_force_fitness(job_data, initial, group))
+        raw_fitness.append(find_force_fitness(job_data, initial, group))
         raw_fitness.append(find_ground_fitness(job_data, initial, group))
         raw_fitness.append(find_energy_fitness(job_data, initial, group))
         fout.write('updating raw_fitness ')
@@ -207,7 +235,7 @@ def find_fitness(job_data, initial=False, group=0):
         # fout.write(str(raw_fitness[0]/job_data.raw_fitness[0])+"\n")
     else:
         raw_fitness = []
-        # raw_fitness.append(find_force_fitness(job_data, initial, group))
+        raw_fitness.append(find_force_fitness(job_data, initial, group))
         raw_fitness.append(find_ground_fitness(job_data, initial, group))
         raw_fitness.append(find_energy_fitness(job_data, initial, group))
         fitness = 0
@@ -215,14 +243,18 @@ def find_fitness(job_data, initial=False, group=0):
         # fout.write(str(num_fitness_params) + "\n")
         # fout.write(str(job_data.raw_fitness) + "\n")
         # fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
+        weights = [100, 1, 100]
+        normalizer = sum(weights)
         if len(raw_fitness) == len(job_data.raw_fitness):
             for i in range(num_fitness_params):
-                fitness += (raw_fitness[i] / job_data.raw_fitness[i]) \
-                    / num_fitness_params
+                fitness += (raw_fitness[i] * weights[i] / job_data.raw_fitness[i]) \
+                    / normalizer
         else:
             # fout.write("Gaussian Failure Found")
             fitness = 1000
-        return fitness
+        for i in range(len(raw_fitness)):
+            raw_fitness[i] = raw_fitness[i] / job_data.raw_fitness[i]
+        return (fitness, raw_fitness)
     fout.close()
 
 
@@ -328,11 +360,15 @@ def wealthGap(job_data, popfits):
 # clones attempt to kill their creators. Only the strongest survive.
 def clone(job_data, elites):
     new_elites = elites
+    print("Old Elite")
+    print(new_elites)
+    print("************")
     for i, p in enumerate(elites):
         gene_0 = job_data.genes[p[0]][0]
         old_fitness = p[1]
+        mutation_rate = job_data.mutation_rate / 5
         perturbed_values = perturb_parameters(gene_0.p_floats,
-                                              job_data.mutation_rate,
+                                              mutation_rate,
                                               job_data.percent_change)
         for g in range(job_data.ngeom):
             file_name = job_data.file_name + "AM1_" + str(g) \
@@ -344,12 +380,22 @@ def clone(job_data, elites):
         # Run the jobs in parallel
         evThread = Thread(job_data)
         evThread.thread_evolve(job_data, p[0])
-        fitness = find_fitness(job_data, False, p[0])
+        (fitness, raw_fitness) = find_fitness(job_data, False, p[0])
         # Either the clone or host survives
         if fitness > old_fitness:
             job_data.genes[p[0]][0] = gene_0
+            for g in range(job_data.ngeom):
+                file_name = job_data.file_name + "AM1_" + str(g) \
+                    + "P" + str(p[0])
+                gene = job_data.genes[p[0]][g]
+                build_input(file_name + ".com", gene.header,
+                            gene.coordinates, gene.params, gene.p_floats)
+                job_data.genes[p[0]][g] = Gene(file_name)
         else:
             new_elites[i] = (p[0], fitness)
+    print("New Elites")
+    print(new_elites)
+    print("***********")
     return sorted(new_elites, key=lambda x: x[1])
 
 
@@ -426,10 +472,13 @@ def select_parent(parents):
 def breed(job_data, elites, peasants):
     new_genes = []
     parents = elites + peasants
+    print("Parents")
     print(parents)
+    print("************")
     # The elite get to pass their genes directly
     for e in elites:
         file_name = job_data.genes[e[0]][0].file_name
+        # file_name = 'test'
         gene = Gene(file_name)
         new_genes.append(gene)
     # Now let everyone randomly mate with one another,
@@ -453,6 +502,9 @@ def breed(job_data, elites, peasants):
         n.file_name = job_data.file_name + "AM1_0P" + str(i)
         build_input(n.file_name + ".com", n.header, n.coordinates,
                     n.params, n.p_floats)
+    for i in range(job_data.population):
+        file_name = job_data.file_name + "AM1_0P" + str(i)
+        job_data.genes[i][0] = Gene(file_name)
 
 
 # Optimize the best gene
