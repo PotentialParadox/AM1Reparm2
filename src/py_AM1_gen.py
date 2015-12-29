@@ -79,8 +79,8 @@ def run_genetic_algorithm(job_data):
 
 start = time.time()
 file_name = 'Furan'
-ji = Job(file_name, number_steps=10, ngeom=4, nproc=4,
-         mutation_rate=.10, percent_change=.20, geo_prtb=0.025, population=12,
+ji = Job(file_name, number_steps=200, ngeom=16, nproc=4,
+         mutation_rate=.10, percent_change=.10, geo_prtb=0.25, population=24,
          survival_chance=0.50, elites=2)
 run_genetic_algorithm(ji)
 fout = open(file_name + '.out', 'a')

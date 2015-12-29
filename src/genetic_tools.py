@@ -243,7 +243,7 @@ def find_fitness(job_data, initial=False, group=0):
         # fout.write(str(num_fitness_params) + "\n")
         # fout.write(str(job_data.raw_fitness) + "\n")
         # fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
-        weights = [100, 1, 100]
+        weights = [10, 1, 10]
         normalizer = sum(weights)
         if len(raw_fitness) == len(job_data.raw_fitness):
             for i in range(num_fitness_params):
@@ -262,9 +262,11 @@ def perturb_parameters(p_floats, mutation_rate, percent_change):
     pertubed_values = []
     for element in p_floats:
         if random.uniform(0, 1) < mutation_rate:
-            low_value = (1 - percent_change) * element
-            high_value = (1 + percent_change) * element
-            random_value = random.uniform(low_value, high_value)
+            # low_value = (1 - percent_change) * element
+            # high_value = (1 + percent_change) * element
+            # random_value = random.uniform(low_value, high_value)
+            stdev = element * percent_change
+            random_value = random.gauss(element, stdev)
             pertubed_values.append(random_value)
         else:
             pertubed_values.append(element)
@@ -366,10 +368,11 @@ def clone(job_data, elites):
     for i, p in enumerate(elites):
         gene_0 = job_data.genes[p[0]][0]
         old_fitness = p[1]
-        mutation_rate = job_data.mutation_rate / 5
+        mutation_rate = job_data.mutation_rate * 2
+        percent_change = job_data.percent_change / 5
         perturbed_values = perturb_parameters(gene_0.p_floats,
                                               mutation_rate,
-                                              job_data.percent_change)
+                                              percent_change)
         for g in range(job_data.ngeom):
             file_name = job_data.file_name + "AM1_" + str(g) \
                 + "P" + str(p[0])
