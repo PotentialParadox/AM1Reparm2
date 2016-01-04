@@ -39,8 +39,8 @@ def build_input(file_name, header, coordinates,
             else:
                 parameter_string += ' '
             line_number = params[1]
-            if not (re.search(p_eheat, params[0])
-                    or re.search(p_EISol, params[0])):
+            if not re.search(p_eheat, params[0]):
+                # or re.search(p_EISol, params[0])):
                 parameter_string += re.sub(p_float, '', params[0])
             else:
                 parameter_string += params[0]
@@ -243,7 +243,7 @@ def find_fitness(job_data, initial=False, group=0):
         # fout.write(str(num_fitness_params) + "\n")
         # fout.write(str(job_data.raw_fitness) + "\n")
         # fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
-        weights = [10, 1, 10]
+        weights = [10, 1, 5]
         normalizer = sum(weights)
         if len(raw_fitness) == len(job_data.raw_fitness):
             for i in range(num_fitness_params):
