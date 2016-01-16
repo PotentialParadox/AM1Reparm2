@@ -41,7 +41,7 @@ class Gene:
         # Patterns
         p_blank = re.compile('^\s*$')
         p_float = re.compile('\-?\d+\.\d+')
-        p_integer = re.compile("\\b(\d)\s")
+        p_integer = re.compile("\\b(\d+)\s")
         blank_count = 0
         atom_count = 0
         atom_value = []
@@ -76,7 +76,6 @@ class Gene:
         p_float = re.compile('\-?\d+\.\d+')
         p_eheat = re.compile('EHeat')
         p_EISol = re.compile('EISol')
-
         blank_count = 0
         am1_params = []
         f = open(self.input_file, 'r')
@@ -96,12 +95,10 @@ class Gene:
     def __extract_floats(self):
         # Patterns
         p_float = re.compile('\-?\d+\.\d+')
-
         parameter_floats = []
         for parameter in self.params:
             if parameter[2] > 0:
                 m = re.findall(p_float, parameter[0])
                 for element in m:
                     parameter_floats.append(float(element))
-
         return parameter_floats

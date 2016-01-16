@@ -1,4 +1,5 @@
 from job_data import Job
+import subprocess
 from gene import Gene
 import genetic_tools as gt
 from threader import Thread
@@ -7,20 +8,21 @@ import time
 
 def run_genetic_algorithm(job_data):
     fout = open(job_data.file_name + ".out", "w")
-    fout.write('*********** Running Genetic Algorithm ***********\n')
+    fout.write('\n*********** Running Genetic Algorithm ***********\n')
     fout.close()
 
     # Build and run the original geometries and parameters
+    gt.dft_opt(job_data)
     gt.build_geometries(job_data)
     initialRun = Thread(job_data)
     initialRun.thread_init(job_data)
 
-    # Find the original fitnesses and store for reference
-    gt.find_fitness(job_data, initial=True)
-
     # Create init files for each population
     gt.duplicate_geometries(job_data)
     job_data.init_genes()
+
+    # Find the original fitnesses and store for reference
+    gt.find_fitness(job_data, initial=True)
 
     best_fitness = 1
     # Run number_steps of generations
@@ -38,7 +40,7 @@ def run_genetic_algorithm(job_data):
             # as a p_float updater
             gene_0 = job_data.genes[p][0]
             if p >= job_data.elites:
-                perturbed_values = gt.perturb_parameters(gene_0.p_floats, \
+                perturbed_values = gt.perturb_parameters(gene_0.p_floats,
                     job_data.mutation_rate, job_data.percent_change)
             else:
                 perturbed_values = gene_0.p_floats
@@ -75,17 +77,29 @@ def run_genetic_algorithm(job_data):
         peasants = gt.survivor(job_data, peasants)
         gt.breed(job_data, elites, peasants)
         fout.close()
+    fout = open(job_data.file_name + ".out", "a")
+    fout.write('Optimize best\n')
+    gt.runBest(job_data)
+    fout.close()
 
 
 start = time.time()
-file_name = 'Furan'
-ji = Job(file_name, number_steps=300, ngeom=16, nproc=4,
-         mutation_rate=.10, percent_change=.10, geo_prtb=0.25, population=24,
-         survival_chance=0.50, elites=2)
-run_genetic_algorithm(ji)
-fout = open(file_name + '.out', 'a')
+file_name = 'Thiophene'
+ji = Job(file_name, number_steps=5, ngeom=4, nproc=4,
+         mutation_rate=.10, percent_change=.10, geo_prtb=0.25, population=6,
+         survival_chance=0.50, elites=2, excited_states=10)
+try:
+    run_genetic_algorithm(ji)
+except KeyboardInterrupt:
+    print("\nProgram closed by user")
+    if ji.running_opt:
+        dftOptFile = ji.original_dft + "Opt.com"
+        subprocess.call(["rm", dftOptFile])
+
+fout = open(ji.file_name + ".out", "a")
 fout.write('Optimize best\n')
 gt.runBest(ji)
 fout.write('Cleaning up\n')
 gt.cleanup(ji)
 fout.write('Run time:' + str(time.time() - start))
+fout.close

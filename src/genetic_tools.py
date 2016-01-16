@@ -39,8 +39,8 @@ def build_input(file_name, header, coordinates,
             else:
                 parameter_string += ' '
             line_number = params[1]
-            if not re.search(p_eheat, params[0]):
-                # or re.search(p_EISol, params[0])):
+            if not (re.search(p_eheat, params[0])
+                or re.search(p_EISol, params[0])):
                 parameter_string += re.sub(p_float, '', params[0])
             else:
                 parameter_string += params[0]
@@ -57,11 +57,58 @@ def build_input(file_name, header, coordinates,
     f.close()
 
 
+def find_dipole(file_name):
+    p_float = re.compile('\-?\d+\.\d+,?')
+    p_dipole = re.compile('Dipole moment \(field-independent'
+                          + ' basis, Debye\)\:\n.+')
+    f = open(file_name, 'r')
+    fin = f.read()
+    m = re.findall(p_dipole, fin)
+    dipole = []
+    for i in m:
+        n = re.findall(p_float, i)
+        for j in n:
+            dipole.append(float(j))
+    dipole = dipole[-4:-1]
+    return dipole
+
+
+def find_dipole_fitness(job_data, initial, group):
+    total_fitness = 0
+    if initial:
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_dipole = find_dipole(AM1_file)
+            DFT_dipole = find_dipole(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_dipole):
+                element_fitness += pow(k - DFT_dipole[j], 2)
+            if len(AM1_dipole) == len(DFT_dipole):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
+    else:
+        for i in range(job_data.ngeom):
+            AM1_file = job_data.file_name + "AM1_" + str(i) \
+                + "P" + str(group) + ".log"
+            DFT_file = job_data.file_name + "DFT_" + str(i) + ".log"
+            AM1_dipole = find_dipole(AM1_file)
+            DFT_dipole = find_dipole(DFT_file)
+            element_fitness = 0
+            for j, k in enumerate(AM1_dipole):
+                element_fitness += pow(k - DFT_dipole[j], 2)
+            if len(AM1_dipole) == len(DFT_dipole):
+                total_fitness += element_fitness
+            else:
+                total_fitness += 99999
+    return total_fitness
+
+
 def find_forces(file_name):
     p_float = re.compile('\-?\d+\.\d+,?')
     p_forces = re.compile('\(Hartrees/Bohr\)')
     p_dash = re.compile('---')
-
     forces = []
     f = open(file_name, 'r')
     force_found = 0
@@ -111,6 +158,37 @@ def find_force_fitness(job_data, initial, group):
     return total_fitness
 
 
+def find_frequencies(file_name):
+    p_float = re.compile('\-?\d+\.\d+,?')
+    p_freq = re.compile('Frequencies')
+    fin = open(file_name, 'r')
+    frequencies = []
+    for line in fin:
+        if re.search(p_freq, line):
+            m = re.findall(p_float, line)
+            for i in m:
+                frequencies.append(float(i))
+    return frequencies
+
+
+def find_ir(file_name):
+    p_float = re.compile('\-?\d+\.\d+,?')
+    p_freq = re.compile('IR Inten')
+    fin = open(file_name, 'r')
+    ir_inten = []
+    for line in fin:
+        if re.search(p_freq, line):
+            m = re.findall(p_float, line)
+            for i in m:
+                ir_inten.append(float(i))
+    return ir_inten
+
+
+# Fitting to IR frequencis will roughly double the time of the program
+def find_freq_fitness(job_data, initial, group):
+    return 0
+
+
 def find_energies(file_name):
     p_float = re.compile('\-?\d+\.\d+,?')
     p_excited = re.compile('Excited\s*State')
@@ -132,11 +210,12 @@ def find_energy_fitness(job_data, initial, group):
             AM1_energies = find_energies(AM1_file)
             DFT_energies = find_energies(DFT_file)
             element_fitness = 0
-            for j, k in enumerate(AM1_energies):
-                element_fitness += pow(k - DFT_energies[j], 2)
             if len(AM1_energies) == len(DFT_energies):
+                for j, k in enumerate(AM1_energies):
+                    element_fitness += pow(k - DFT_energies[j], 2)
                 total_fitness += element_fitness
             else:
+                print("Error with excited States")
                 total_fitness += 99999
         return total_fitness
     else:
@@ -148,12 +227,13 @@ def find_energy_fitness(job_data, initial, group):
             AM1_energies = find_energies(AM1_file)
             DFT_energies = find_energies(DFT_file)
             element_fitness = 0
-            for j, k in enumerate(AM1_energies):
-                element_fitness += pow(k - DFT_energies[j], 2)
             if len(AM1_energies) == len(DFT_energies):
+                for j, k in enumerate(AM1_energies):
+                    element_fitness += pow(k - DFT_energies[j], 2)
                 total_fitness += element_fitness
             else:
-                total_fitness += 99999
+                print("Error with excited States")
+                total_fitness += job_data.raw_fitness[2] * 10
         return total_fitness
 
 
@@ -215,7 +295,7 @@ def find_ground_fitness(job_data, initial, group):
         for i in range(job_data.ngeom):
             totalFitness += pow(AM1Energies[i] - DFTEnergies[i], 2)
         if totalFitness == 0:
-            totalFitness = 1000
+            totalFitness = job_data.raw_fitness[1] * 10
         return totalFitness
 
 
@@ -229,6 +309,7 @@ def find_fitness(job_data, initial=False, group=0):
         raw_fitness.append(find_force_fitness(job_data, initial, group))
         raw_fitness.append(find_ground_fitness(job_data, initial, group))
         raw_fitness.append(find_energy_fitness(job_data, initial, group))
+        raw_fitness.append(find_dipole_fitness(job_data, initial, group))
         fout.write('updating raw_fitness ')
         fout.write(str(raw_fitness)+"\n")
         job_data.raw_fitness = raw_fitness
@@ -238,22 +319,17 @@ def find_fitness(job_data, initial=False, group=0):
         raw_fitness.append(find_force_fitness(job_data, initial, group))
         raw_fitness.append(find_ground_fitness(job_data, initial, group))
         raw_fitness.append(find_energy_fitness(job_data, initial, group))
+        raw_fitness.append(find_dipole_fitness(job_data, initial, group))
         fitness = 0
-        num_fitness_params = len(raw_fitness)
+        # num_fitness_params = len(raw_fitness)
         # fout.write(str(num_fitness_params) + "\n")
         # fout.write(str(job_data.raw_fitness) + "\n")
         # fout.write(str(raw_fitness[0]) + " " + str(raw_fitness[1]) + "\n")
-        weights = [10, 1, 5]
-        normalizer = sum(weights)
-        if len(raw_fitness) == len(job_data.raw_fitness):
-            for i in range(num_fitness_params):
-                fitness += (raw_fitness[i] * weights[i] / job_data.raw_fitness[i]) \
-                    / normalizer
-        else:
-            # fout.write("Gaussian Failure Found")
-            fitness = 1000
         for i in range(len(raw_fitness)):
             raw_fitness[i] = raw_fitness[i] / job_data.raw_fitness[i]
+        fitness = 0
+        for i, f in enumerate(raw_fitness):
+            fitness += pow(raw_fitness[i], 2) / sum(raw_fitness)
         return (fitness, raw_fitness)
     fout.close()
 
@@ -275,9 +351,14 @@ def perturb_parameters(p_floats, mutation_rate, percent_change):
 
 def build_geometries(job):
     original = job.original_am1
+    dft_opt = Gene(job.original_dft + "Opt")
+    am1_freq_header = ("#P AM1(Input,print) freq\n\n"
+                       + job.file_name + " at AM1\n\n")
+    dft_freq_header = ("#P " + job.hl + " freq\n\n"
+                       + job.file_name + " at " + job.hl + "\n\n")
     for i in range(job.ngeom):
         perturbed_values = []
-        for element in original.coordinates[2]:
+        for element in dft_opt.coordinates[2]:
             low_value = element - job.geo_prtb
             high_value = element + job.geo_prtb
             random_value = random.uniform(low_value, high_value)
@@ -286,12 +367,20 @@ def build_geometries(job):
         old_av = original.coordinates[1]
         new_gemetry = perturbed_values
         new_coordinates = (old_spin, old_av, new_gemetry)
+        if i == 0:
+            new_coordinates = dft_opt.coordinates
         job.coordinates.append(new_coordinates)
-        file_name = original.file_name + "_" + str(i) + ".com"
+        am1_name = original.file_name + "_" + str(i) + ".com"
         dft_name = job.original_dft + "_" + str(i) + ".com"
-        build_input(file_name, original.header, new_coordinates,
+        am1_freq_name = original.file_name + "_freq" + str(i) + ".com"
+        dft_freq_name = job.original_dft + "_freq" + str(i) + ".com"
+        build_input(am1_name, original.header, new_coordinates,
                     original.params, original.p_floats)
         build_input(dft_name, job.dft_header, new_coordinates,
+                    original.params, original.p_floats, "yes")
+        build_input(am1_freq_name, am1_freq_header, new_coordinates,
+                    original.params, original.p_floats)
+        build_input(dft_freq_name, dft_freq_header, new_coordinates,
                     original.params, original.p_floats, "yes")
 
 
@@ -320,16 +409,56 @@ def init_run(job_data, geometry_number):
     result = run_gaussian(DFT_file_name)
     if result == 'fail':
         fout.write("Gaussian Failure")
+    AM1_file_name = job_data.file_name + "AM1_freq" + str(geometry_number)
+    fout.write('running ' + AM1_file_name + '\n')
+    result = run_gaussian(AM1_file_name)
+    if result == 'fail':
+        fout.write("Gaussian Failure")
+    DFT_file_name = job_data.file_name + "DFT_freq" + str(geometry_number)
+    fout.write('running ' + DFT_file_name + '\n')
+    result = run_gaussian(DFT_file_name)
+    if result == 'fail':
+        fout.write("Gaussian Failure")
     fout.close()
     return 0
+
+
+def dft_opt(job_data):
+    fout = open(job_data.file_name + ".out", "a")
+    original = job_data.original_am1
+    file_name = job_data.original_dft + "Opt.com"
+    top = ("#P " + job_data.hl + " Opt Freq")
+    p_top = re.compile(top)
+    header = ("#P " + job_data.hl + " Opt Freq\n\n"
+              + job_data.file_name + " at " + job_data.hl + "\n\n")
+    opt_found = False
+    try:
+        fin = open(file_name, 'r')
+        for line in fin:
+            if re.search(p_top, line):
+                opt_found = True
+                fout.write("Found previous high level optimizataion\n")
+    except OSError:
+        fout.write("No high level opt exists.\n")
+    if not opt_found:
+        fout.write("Running opt now.\n")
+        job_data.running_opt = True
+        build_input(file_name, header, original.coordinates,
+                    original.params, original.p_floats, "yes")
+        run_gaussian(job_data.original_dft + "Opt")
+        job_data.running_opt = False
+        fout.write("Optimization Complete\n")
 
 
 def mutate(job_data, geometry_number, group):
     fout = open(job_data.file_name + ".out", "a")
     file_name = job_data.file_name + "AM1_" + str(geometry_number) \
         + "P" + str(group)
+    freq_name = job_data.file_name + "AM1_freq" + str(geometry_number) \
+        + "P" + str(group)
     # fout.write('running' + file_name + '\n')
     gausReturn = run_gaussian(file_name)
+    gausReturn = run_gaussian(freq_name)
     fout.close()
     return gausReturn
 
@@ -337,12 +466,17 @@ def mutate(job_data, geometry_number, group):
 def duplicate_geometries(job_data):
     ngeom = job_data.ngeom
     population = job_data.population
+    original = job_data.original_am1
     for i in range(ngeom):
         for j in range(population):
-            am1O = job_data.file_name + "AM1_" + str(i) + ".com"
-            am1C = job_data.file_name + "AM1_" + str(i) \
-                + "P" + str(j) + ".com"
-            subprocess.call(["cp", am1O, am1C])
+            am10 = job_data.file_name + "AM1_" + str(i) + ".com"
+            am1c = (job_data.file_name + "AM1_" + str(i)
+                    + "P" + str(j) + ".com")
+            am1f0 = original.file_name + "_freq" + str(i) + ".com"
+            am1fc = (original.file_name + "_freq" + str(i)
+                     + "P" + str(j) + ".com")
+            subprocess.call(["cp", am10, am1c])
+            subprocess.call(["cp", am1f0, am1fc])
     return 0
 
 
@@ -531,7 +665,6 @@ def runBest(job_data):
     fout.write(inputString)
     fout.close()
     run_gaussian(job_data.file_name + "BestInput")
-    subprocess.call(["rm", bestInput])
 
 
 # Delete the obsolete files
@@ -542,19 +675,33 @@ def cleanup(job_data):
     for i in range(ngeom):
         am1 = job_data.file_name + "AM1_" + str(i)
         dft = job_data.file_name + "DFT_" + str(i)
+        dftfreq = job_data.file_name + "DFT_freq" + str(i)
+        am1freq = job_data.file_name + "AM1_freq" + str(i)
         inputAM1 = am1 + ".com"
         outputAM1 = am1 + ".log"
         inputDFT = dft + ".com"
         outputDFT = dft + ".log"
+        indftfreq = dftfreq + ".com"
+        outdftfreq = dftfreq + ".log"
+        inam1freq = am1freq + ".com"
+        outam1freq = am1freq + ".log"
         subprocess.call(["rm", inputAM1])
         subprocess.call(["rm", outputAM1])
         subprocess.call(["rm", inputDFT])
         subprocess.call(["rm", outputDFT])
+        subprocess.call(["rm", inam1freq])
+        subprocess.call(["rm", outam1freq])
+        subprocess.call(["rm", indftfreq])
+        subprocess.call(["rm", outdftfreq])
     # GA Files
         for j in range(npop):
             am1 = job_data.file_name + "AM1_" + str(i) \
                 + "P" + str(j)
             inputAM1 = am1 + ".com"
             outputAM1 = am1 + ".log"
-            subprocess.call(["rm", inputAM1])
-            subprocess.call(["rm", outputAM1])
+            freq = job_data.file_name + "AM1_freq" + str(i) \
+                + "P" + str(j)
+            infreq = freq + ".com"
+            outfreq = freq + ".log"
+            subprocess.call(["rm", infreq])
+            subprocess.call(["rm", outfreq])
