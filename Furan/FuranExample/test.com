@@ -1,4 +1,4 @@
-Testing
+#P AM1=(print,input) opt
 
 AM1-Reparam Input
 
